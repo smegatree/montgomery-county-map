@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SE Pennsylvania Regional Map - School Districts & Environmental Analysis</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+.layer-control { 
+  position: absolute; 
+  top: 10px; 
+  right: 10px; 
+  background: white; 
+  padding: 12px; 
+  border-radius: 5px; 
+  box-shadow: 0 0 15px rgba(0,0,0,0.2); 
+  z-index: 1000; 
+  max-height: 85vh; 
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 320px;
+}
+.layer-control label { 
+  display: block; 
+  margin: 10px 0; 
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+  padding: 5px;
+}
+.layer-control label:hover { background: #f9f9f9; }
+.layer-control input { 
+  margin-right: 8px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+.layer-control h3 { 
+  margin: 15px 0 8px 0; 
+  font-size: 14px; 
+  border-bottom: 1px solid #ccc; 
+  padding-bottom: 5px; 
+}
+.layer-control-content { 
+  display: block; 
+  margin-top: 10px;
+}
+.layer-control-content.collapsed { 
+  display: none; 
+}
+.toggle-btn { 
+  background: #378ADD; 
+  color: white; 
+  border: none; 
+  padding: 12px 16px; 
+  border-radius: 5px; 
+  cursor: pointer; 
+  font-size: 15px; 
+  font-weight: bold; 
+  width: 100%; 
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  display: block;
+}
+.toggle-btn:active { 
+  background: #2a6bb5; 
+  transform: scale(0.98);
+}
+.toggle-btn:hover {
+  background: #2a6bb5;
+}
+
+@media (max-width: 768px) {
+  .layer-control { 
+    top: 10px; 
+    right: 10px; 
+    left: 10px; 
+    max-width: none;
+  }
+  .layer-control h2 { 
+    font-size: 15px; 
+  }
+  .layer-control label {
+    padding: 8px 5px;
+  }
+  .layer-control input {
+    width: 20px;
+    height: 20px;
+  }
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="layer-control" id="layerControl">
+<button class="toggle-btn" ontouchstart="toggleLegend(); return false;" onclick="toggleLegend(); return false;">▼ Hide Layers</button>
+<div class="layer-control-content" id="layerContent">
+<h2 style="margin-top:0; font-size:16px;">SE PA Regional Map</h2>
+
+<h3>School Districts by Tier</h3>
+<label><input type="checkbox" id="tier1" checked> <strong>Tier 1 Elite</strong> (Purple) - Top 5%</label>
+<label><input type="checkbox" id="tier2" checked> <strong>Tier 2 Strong</strong> (Teal) - Top 10%</label>
+<label><input type="checkbox" id="tier3" checked> <strong>Tier 3 Solid</strong> (Blue)</label>
+
+<h3>Commute Zones</h3>
+<label><input type="checkbox" id="zone_ideal" checked> <strong>Ideal Zone</strong> (Green) - Meets both rules</label>
+<label><input type="checkbox" id="zone_stretch" checked> <strong>Stretch Zone</strong> (Yellow) - Close to limits</label>
+<label><input type="checkbox" id="zone_outside" checked> <strong>Outside Rules</strong> (Orange) - Worth seeing</label>
+
+<h3>Environmental Hazards</h3>
+<label><input type="checkbox" id="nuclear" checked> <strong>Nuclear Plant</strong> (15mi buffer)</label>
+<label><input type="checkbox" id="superfund" checked> <strong>Superfund Sites</strong></label>
+<label><input type="checkbox" id="waste" checked> <strong>Waste Facilities</strong></label>
+
+<h3>Reference Points</h3>
+<label><input type="checkbox" id="commute" checked> <strong>Work Locations</strong></label>
+<label><input type="checkbox" id="highways" checked> <strong>Major Highways</strong></label>
+
+<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 12px; color: #666;">
+<strong>Legend:</strong><br>
+• Green = ≤30min Harleysville + ≤60min Wilmington<br>
+• Yellow = Slightly over one rule<br>
+• Orange = Outside rules but quality schools<br>
+<br>
+<strong>Coverage:</strong> Montgomery, Delaware, Chester, Bucks Counties
+</div>
+</div>
+</div>
+
+<script>
+// Toggle function - must be global so button can call it
+function toggleLegend() {
+    const content = document.getElementById('layerContent');
+    const button = document.querySelector('.toggle-btn');
+    
+    if (content.classList.contains('collapsed')) {
+        content.classList.remove('collapsed');
+        button.textContent = '▼ Hide Layers';
+    } else {
+        content.classList.add('collapsed');
+        button.textContent = '☰ Show Layers';
+    }
+    
+    return false;
+}
+
+// Wait for page and libraries to fully load
+window.onload = function() {
+// Initialize map - wider view to show regional coverage
+const map = L.map('map').setView([40.05, -75.35], 10);
+
+// Add OpenStreetMap tiles
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18
+}).addTo(map);
+
+// Color schemes
+const colors = {
+    tier1: '#7F77DD',  // Purple
+    tier2: '#1D9E75',  // Teal
+    tier3: '#378ADD',  // Blue
+    nuclear: '#E24B4A', // Red
+    superfund: '#F09595',
+    waste: '#B4B2A9',
+    zone_ideal: '#4CAF50',      // Green - meets rules
+    zone_stretch: '#FFC107',    // Yellow - close
+    zone_outside: '#FF9800'     // Orange - outside
+};
+
+// Layer groups
+const layers = {
+    tier1: L.layerGroup().addTo(map),
+    tier2: L.layerGroup().addTo(map),
+    tier3: L.layerGroup().addTo(map),
+    nuclear: L.layerGroup().addTo(map),
+    superfund: L.layerGroup().addTo(map),
+    waste: L.layerGroup().addTo(map),
+    commute: L.layerGroup().addTo(map),
+    highways: L.layerGroup().addTo(map),
+    zone_ideal: L.layerGroup().addTo(map),
+    zone_stretch: L.layerGroup().addTo(map),
+    zone_outside: L.layerGroup().addTo(map)
+};
+
+// ========== MONTGOMERY COUNTY TIER 1 DISTRICTS ==========
+L.polygon([
+    [40.0095, -75.2913], [40.0095, -75.2313], [39.9695, -75.2313], [39.9695, -75.2913]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Lower Merion SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>#3 in PA<br>Ardmore/Wynnewood<br>⚠ 35-45 min to Harleysville<br>✓ New construction limited<br><br><a href="https://www.zillow.com/lower-merion-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/11862/PA/Lower-Merion" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+L.polygon([
+    [40.1847, -75.2514], [40.1847, -75.1814], [40.1147, -75.1814], [40.1147, -75.2514]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Wissahickon SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>#15 PA, #21 statewide<br>Ambler/Lower Gwynedd<br>✓ 25-30 min to Harleysville<br>✓ New construction available<br><br><a href="https://www.zillow.com/lower-gwynedd-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/30403/PA/Lower-Gwynedd" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+L.polygon([
+    [40.1742, -75.2156], [40.1742, -75.1456], [40.1042, -75.1456], [40.1042, -75.2156]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Upper Dublin SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>#21 PA, #39 statewide<br>Fort Washington/Dresher<br>✓ 25-30 min to Harleysville<br>✓ New construction available<br><br><a href="https://www.zillow.com/fort-washington-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/6365/PA/Fort-Washington" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+// ========== DELAWARE COUNTY TIER 1 DISTRICTS ==========
+L.polygon([
+    [39.9047, -75.3514], [39.9047, -75.2814], [39.8347, -75.2814], [39.8347, -75.3514]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Wallingford-Swarthmore SD</strong><br><span style="color:#666; font-size:11px;">DELAWARE COUNTY</span><br>Top tier in PA<br>Wallingford/Swarthmore<br>⚠ 40+ min to Harleysville<br>✓ 30-35 min to Wilmington<br>✓ New construction available<br><br><a href="https://www.zillow.com/wallingford-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/18478/PA/Wallingford" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+L.polygon([
+    [39.8647, -75.4514], [39.8647, -75.3814], [39.7947, -75.3814], [39.7947, -75.4514]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Garnet Valley SD</strong><br><span style="color:#666; font-size:11px;">DELAWARE COUNTY</span><br>Excellent schools<br>Glen Mills/Concord<br>⚠ 45+ min to Harleysville<br>✓ 25-30 min to Wilmington<br>✓ New construction available<br><br><a href="https://www.zillow.com/glen-mills-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/6642/PA/Glen-Mills" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+L.polygon([
+    [40.0447, -75.3847], [40.0447, -75.3147], [39.9747, -75.3147], [39.9747, -75.3847]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Radnor Township SD</strong><br><span style="color:#666; font-size:11px;">DELAWARE/CHESTER COUNTIES</span><br>Top 10 in PA<br>Radnor/Wayne<br>⚠ 35-40 min to Harleysville<br>✓ 40-45 min to Wilmington<br>Limited new construction<br><br><a href="https://www.zillow.com/radnor-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/14530/PA/Radnor" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+L.polygon([
+    [40.0147, -75.3247], [40.0147, -75.2547], [39.9447, -75.2547], [39.9447, -75.3247]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Haverford Township SD</strong><br><span style="color:#666; font-size:11px;">DELAWARE COUNTY</span><br>Strong Main Line district<br>Havertown/Haverford<br>⚠ 40+ min to Harleysville<br>✓ 35-40 min to Wilmington<br>Limited new construction<br><br><a href="https://www.zillow.com/havertown-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/7553/PA/Havertown" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+// ========== CHESTER COUNTY TIER 1 DISTRICTS ==========
+L.polygon([
+    [40.0647, -75.4747], [40.0647, -75.4047], [39.9947, -75.4047], [39.9947, -75.4747]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Tredyffrin-Easttown SD</strong><br><span style="color:#666; font-size:11px;">CHESTER COUNTY</span><br>#2 in PA - Elite!<br>Wayne/Devon/Berwyn<br>⚠ 35-40 min to Harleysville<br>✓ 45-50 min to Wilmington<br>Limited new construction<br><br><a href="https://www.zillow.com/berwyn-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/1619/PA/Berwyn" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+L.polygon([
+    [39.8747, -75.6247], [39.8747, -75.5547], [39.8047, -75.5547], [39.8047, -75.6247]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Unionville-Chadds Ford SD</strong><br><span style="color:#666; font-size:11px;">CHESTER COUNTY</span><br>Top 15 in PA<br>Unionville/Chadds Ford<br>⚠ 50+ min to Harleysville<br>✓ 20-25 min to Wilmington<br>✓ New construction available<br><br><a href="https://www.zillow.com/chadds-ford-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/3291/PA/Chadds-Ford" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+L.polygon([
+    [40.0447, -75.5847], [40.0447, -75.5147], [39.9747, -75.5147], [39.9747, -75.5847]
+], {
+    color: colors.tier1, fillColor: colors.tier1, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Downingtown Area SD</strong><br><span style="color:#666; font-size:11px;">CHESTER COUNTY</span><br>Top 20 in PA<br>Downingtown/Exton<br>⚠ 35-40 min to Harleysville<br>✓ 45-50 min to Wilmington<br>✓ New construction available<br><br><a href="https://www.zillow.com/downingtown-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/5360/PA/Downingtown" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier1);
+
+// ========== MONTGOMERY COUNTY TIER 2 DISTRICTS ==========
+L.polygon([
+    [40.1167, -75.3247], [40.1167, -75.2547], [40.0467, -75.2547], [40.0467, -75.3247]
+], {
+    color: colors.tier2, fillColor: colors.tier2, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Plymouth-Whitemarsh SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>#24 statewide<br>Plymouth Meeting<br>✓ New construction available<br><br><a href="https://www.zillow.com/plymouth-meeting-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/14199/PA/Plymouth-Meeting" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier2);
+
+L.polygon([
+    [40.2464, -75.5192], [40.2464, -75.4492], [40.1764, -75.4492], [40.1764, -75.5192]
+], {
+    color: colors.tier2, fillColor: colors.tier2, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Perkiomen Valley SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>#41 statewide<br>Collegeville/Skippack<br>⚠ Near Limerick<br>✓ New construction (Boxwood by Toll Brothers)<br><br><a href="https://www.zillow.com/collegeville-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/3734/PA/Collegeville" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier2);
+
+L.polygon([
+    [40.2136, -75.5647], [40.2136, -75.4947], [40.1436, -75.4947], [40.1436, -75.5647]
+], {
+    color: colors.tier2, fillColor: colors.tier2, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Spring-Ford SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>#36 statewide<br>⚠ Near Limerick<br>Check for new construction<br><br><a href="https://www.zillow.com/royersford-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/15293/PA/Royersford" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier2);
+
+// ========== CHESTER COUNTY TIER 2 DISTRICTS ==========
+L.polygon([
+    [40.0847, -75.5447], [40.0847, -75.4747], [40.0147, -75.4747], [40.0147, -75.5447]
+], {
+    color: colors.tier2, fillColor: colors.tier2, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Great Valley SD</strong><br><span style="color:#666; font-size:11px;">CHESTER COUNTY</span><br>Strong district<br>Malvern area<br>✓ New construction available<br><br><a href="https://www.zillow.com/malvern-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/10859/PA/Malvern" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier2);
+
+// ========== BUCKS COUNTY TIER 2 DISTRICTS ==========
+L.polygon([
+    [40.3414, -75.1741], [40.3414, -75.1041], [40.2714, -75.1041], [40.2714, -75.1741]
+], {
+    color: colors.tier2, fillColor: colors.tier2, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Central Bucks SD</strong><br><span style="color:#666; font-size:11px;">BUCKS COUNTY</span><br>Top 50 in PA<br>Doylestown/Chalfont<br>✓ 25-30 min to Harleysville<br>⚠ 70+ min to Wilmington<br>✓ New construction available<br><br><a href="https://www.zillow.com/doylestown-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/5348/PA/Doylestown" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier2);
+
+L.polygon([
+    [40.2214, -74.9741], [40.2214, -74.9041], [40.1514, -74.9041], [40.1514, -74.9741]
+], {
+    color: colors.tier2, fillColor: colors.tier2, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Council Rock SD</strong><br><span style="color:#666; font-size:11px;">BUCKS COUNTY</span><br>Top 50 in PA<br>Newtown/Northampton<br>⚠ 40+ min to Harleysville<br>⚠ 70+ min to Wilmington<br>Check for new construction<br><br><a href="https://www.zillow.com/newtown-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/12850/PA/Newtown" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier2);
+
+// ========== TIER 3 DISTRICTS ==========
+L.polygon([
+    [40.2714, -75.3139], [40.2714, -75.2439], [40.2014, -75.2439], [40.2014, -75.3139]
+], {
+    color: colors.tier3, fillColor: colors.tier3, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>North Penn SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>Large district, solid<br>Lansdale<br>✓ New construction available<br><br><a href="https://www.zillow.com/lansdale-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/9812/PA/Lansdale" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier3);
+
+L.polygon([
+    [40.2036, -75.1464], [40.2036, -75.0764], [40.1336, -75.0764], [40.1336, -75.1464]
+], {
+    color: colors.tier3, fillColor: colors.tier3, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Hatboro-Horsham SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>Solid, affordable<br>✓ New construction available<br><br><a href="https://www.zillow.com/horsham-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/7963/PA/Horsham" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier3);
+
+L.polygon([
+    [40.3314, -75.3541], [40.3314, -75.2841], [40.2614, -75.2841], [40.2614, -75.3541]
+], {
+    color: colors.tier3, fillColor: colors.tier3, fillOpacity: 0.3, weight: 2
+}).bindPopup('<strong>Souderton Area SD</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>20-25 min to Harleysville<br>✓ 18+ miles from Limerick<br>✓ New construction available<br><br><a href="https://www.zillow.com/souderton-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/16497/PA/Souderton" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.tier3);
+
+// ========== COMMUTE ZONES ==========
+// Ideal Zone (Green) - Fort Washington, Lower Gwynedd, Horsham
+L.circle([40.1364, -75.1956], {
+    color: colors.zone_ideal, fillColor: colors.zone_ideal, fillOpacity: 0.25, radius: 3000
+}).bindPopup('<strong>✓ IDEAL: Fort Washington/Dresher</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>Upper Dublin Schools (Tier 1, #39 PA)<br>25-30 min to Harleysville<br>50-60 min to Wilmington<br>20+ miles from Limerick<br>Price: $700k-$1.1M | Lots: 0.25-0.5 acres<br>✓ New construction available<br><br><a href="https://www.zillow.com/fort-washington-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/6365/PA/Fort-Washington" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_ideal);
+
+L.circle([40.1781, -75.2564], {
+    color: colors.zone_ideal, fillColor: colors.zone_ideal, fillOpacity: 0.25, radius: 3000
+}).bindPopup('<strong>✓ IDEAL: Lower Gwynedd</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>Wissahickon Schools (Tier 1, #21 PA)<br>25-30 min to Harleysville<br>50-60 min to Wilmington<br>18+ miles from Limerick<br>Price: $700k-$1M | Lots: 0.3-0.5+ acres<br>✓ New construction available<br><br><a href="https://www.zillow.com/lower-gwynedd-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/30403/PA/Lower-Gwynedd" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_ideal);
+
+L.circle([40.1823, -75.1168], {
+    color: colors.zone_ideal, fillColor: colors.zone_ideal, fillOpacity: 0.25, radius: 2500
+}).bindPopup('<strong>✓ IDEAL: Horsham</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>Hatboro-Horsham Schools (Tier 3)<br>20-25 min to Harleysville<br>45-55 min to Wilmington<br>Price: $500k-$750k | Lots: 0.25-0.4 acres<br>✓ Most affordable option<br>✓ Good new construction inventory<br><br><a href="https://www.zillow.com/horsham-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/7963/PA/Horsham" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_ideal);
+
+// Stretch Zone (Yellow) - Slightly over on one rule
+L.circle([40.1864, -75.4492], {
+    color: colors.zone_stretch, fillColor: colors.zone_stretch, fillOpacity: 0.25, radius: 2800
+}).bindPopup('<strong>⚠ STRETCH: Collegeville/Trappe</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>Perkiomen Valley Schools (Tier 2, #41 PA)<br>15-20 min to Harleysville (BEST!)<br>55-65 min to Wilmington<br>⚠ 10-12 miles from Limerick<br>Price: $600k-$900k | Lots: 0.3-0.5+ acres<br>✓ New construction: Boxwood by Toll Brothers<br><br><a href="https://www.zillow.com/collegeville-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/3734/PA/Collegeville" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_stretch);
+
+L.circle([40.0095, -75.2613], {
+    color: colors.zone_stretch, fillColor: colors.zone_stretch, fillOpacity: 0.25, radius: 2500
+}).bindPopup('<strong>⚠ STRETCH: Lower Merion</strong><br><span style="color:#666; font-size:11px;">MONTGOMERY COUNTY</span><br>Lower Merion Schools (#3 in PA!)<br>35-40 min to Harleysville<br>45-50 min to Wilmington<br>Price: $700k-$1.5M+ | Lots: 0.2-0.5 acres<br>Limited new construction (established area)<br><br><a href="https://www.zillow.com/lower-merion-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/11862/PA/Lower-Merion" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_stretch);
+
+L.circle([40.0447, -75.3497], {
+    color: colors.zone_stretch, fillColor: colors.zone_stretch, fillOpacity: 0.25, radius: 2500
+}).bindPopup('<strong>⚠ STRETCH: Radnor/Wayne</strong><br><span style="color:#666; font-size:11px;">DELAWARE/CHESTER COUNTIES</span><br>Radnor Schools (Top 10 PA)<br>35-40 min to Harleysville<br>40-45 min to Wilmington<br>Price: $800k-$1.3M+ | Lots: 0.3-0.7 acres<br>Limited new construction<br><br><a href="https://www.zillow.com/radnor-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/14530/PA/Radnor" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_stretch);
+
+// Outside Zone (Orange) - Outside rules but worth seeing
+L.circle([39.9047, -75.3164], {
+    color: colors.zone_outside, fillColor: colors.zone_outside, fillOpacity: 0.2, radius: 2500
+}).bindPopup('<strong>⚠ OUTSIDE: Wallingford/Swarthmore</strong><br><span style="color:#666; font-size:11px;">DELAWARE COUNTY</span><br>Elite schools (Top tier PA)<br>⚠ 40+ min to Harleysville<br>✓ 30-35 min to Wilmington<br>Price: $600k-$1.2M | Lots: 0.25-0.5 acres<br>✓ New construction available<br><br><a href="https://www.zillow.com/wallingford-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/18478/PA/Wallingford" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_outside);
+
+L.circle([39.8647, -75.4164], {
+    color: colors.zone_outside, fillColor: colors.zone_outside, fillOpacity: 0.2, radius: 2500
+}).bindPopup('<strong>⚠ OUTSIDE: Garnet Valley</strong><br><span style="color:#666; font-size:11px;">DELAWARE COUNTY</span><br>Excellent schools<br>⚠ 45+ min to Harleysville<br>✓ 25-30 min to Wilmington<br>Price: $550k-$1M | Lots: 0.3-1+ acres<br>✓ More space available<br>✓ New construction available<br><br><a href="https://www.zillow.com/glen-mills-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/6642/PA/Glen-Mills" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_outside);
+
+L.circle([40.0447, -75.4597], {
+    color: colors.zone_outside, fillColor: colors.zone_outside, fillOpacity: 0.2, radius: 2500
+}).bindPopup('<strong>⚠ OUTSIDE: Tredyffrin-Easttown</strong><br><span style="color:#666; font-size:11px;">CHESTER COUNTY</span><br>#2 in PA - Elite!<br>⚠ 35-40 min to Harleysville<br>⚠ 45-50 min to Wilmington<br>Price: $700k-$1.5M+ | Lots: 0.3-0.7 acres<br>Limited new construction (premium area)<br><br><a href="https://www.zillow.com/berwyn-pa/" target="_blank" style="background:#0074e4; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Zillow</a> <a href="https://www.redfin.com/city/1619/PA/Berwyn" target="_blank" style="background:#a02021; color:white; padding:6px 12px; text-decoration:none; border-radius:4px; display:inline-block; margin:2px;">Search Redfin</a>').addTo(layers.zone_outside);
+
+// ========== ENVIRONMENTAL HAZARDS ==========
+// Limerick Nuclear Plant
+L.circle([40.2274, -75.5832], {
+    color: colors.nuclear, fillColor: colors.nuclear, fillOpacity: 0.15, radius: 24140
+}).bindPopup('<strong>15-mile safety buffer</strong><br>Stay outside this circle').addTo(layers.nuclear);
+
+L.marker([40.2274, -75.5832]).bindPopup('<strong>Limerick Nuclear Plant</strong><br>2,300 MW facility').addTo(layers.nuclear);
+
+// Superfund Sites
+L.marker([40.2856, -75.3947]).bindPopup('<strong>Baghurst Drive Superfund</strong><br>Near Harleysville<br>VOC contamination').addTo(layers.superfund);
+L.marker([40.1547, -75.2114]).bindPopup('<strong>BoRit Asbestos Superfund</strong><br>Ambler area<br>Capped').addTo(layers.superfund);
+L.marker([40.2414, -75.2839]).bindPopup('<strong>North Penn Area 6 Superfund</strong><br>Lansdale<br>Active monitoring').addTo(layers.superfund);
+L.marker([40.2656, -75.4014]).bindPopup('<strong>Salford Quarry Superfund</strong><br>Lower Salford').addTo(layers.superfund);
+L.marker([40.1089, -75.3247]).bindPopup('<strong>Fischer & Porter Superfund</strong><br>Warminster').addTo(layers.superfund);
+L.marker([40.2514, -75.1814]).bindPopup('<strong>Moyers Landfill Superfund</strong><br>Eagleville<br>Capped').addTo(layers.superfund);
+
+// Waste Facilities
+L.marker([40.2723, -75.6699]).bindPopup('<strong>Pottstown Landfill</strong>').addTo(layers.waste);
+L.marker([40.2908, -75.3541]).bindPopup('<strong>Mascaro Souderton Transfer</strong><br>800 tons/day').addTo(layers.waste);
+L.marker([40.0945, -75.3176]).bindPopup('<strong>Conshohocken Transfer</strong>').addTo(layers.waste);
+
+// ========== WORK LOCATIONS ==========
+const workIcon = L.divIcon({
+    className: 'work-marker',
+    html: '<div style="background: #FF5722; color: white; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; border: 4px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-weight: bold;">🏢</div>',
+    iconSize: [50, 50],
+    iconAnchor: [25, 25]
+});
+
+L.marker([40.2795, -75.3871], {icon: workIcon})
+    .bindPopup('<strong style="font-size: 16px; color: #FF5722;">🎯 Harleysville</strong><br><strong>Primary work location</strong><br>Target: ≤30 min commute')
+    .addTo(layers.commute);
+
+L.marker([39.7447, -75.5484], {icon: workIcon})
+    .bindPopup('<strong style="font-size: 16px; color: #FF5722;">🎯 Wilmington, DE</strong><br><strong>Secondary work location</strong><br>Target: ≤60 min commute')
+    .addTo(layers.commute);
+
+// ========== HIGHWAYS ==========
+const highwayIcon = L.divIcon({
+    className: 'highway-marker',
+    html: '<div style="background: #9E9E9E; color: white; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">HIGHWAY</div>',
+    iconSize: [60, 20]
+});
+
+L.marker([40.0867, -75.2947], {icon: highwayIcon})
+    .bindPopup('<strong>I-476 (Blue Route)</strong><br>North-south highway<br>Noise/air quality concern')
+    .addTo(layers.highways);
+
+L.marker([40.2014, -75.3539], {icon: highwayIcon})
+    .bindPopup('<strong>PA Turnpike (I-276)</strong><br>East-west highway')
+    .addTo(layers.highways);
+
+L.marker([40.1164, -75.3447], {icon: highwayIcon})
+    .bindPopup('<strong>Route 202</strong><br>Major commuter route')
+    .addTo(layers.highways);
+
+L.marker([39.8364, -75.5447], {icon: highwayIcon})
+    .bindPopup('<strong>I-95</strong><br>Major north-south to Wilmington')
+    .addTo(layers.highways);
+
+// Layer toggles
+document.getElementById('tier1').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.tier1) : map.removeLayer(layers.tier1);
+});
+document.getElementById('tier2').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.tier2) : map.removeLayer(layers.tier2);
+});
+document.getElementById('tier3').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.tier3) : map.removeLayer(layers.tier3);
+});
+document.getElementById('nuclear').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.nuclear) : map.removeLayer(layers.nuclear);
+});
+document.getElementById('superfund').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.superfund) : map.removeLayer(layers.superfund);
+});
+document.getElementById('waste').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.waste) : map.removeLayer(layers.waste);
+});
+document.getElementById('commute').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.commute) : map.removeLayer(layers.commute);
+});
+document.getElementById('highways').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.highways) : map.removeLayer(layers.highways);
+});
+document.getElementById('zone_ideal').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.zone_ideal) : map.removeLayer(layers.zone_ideal);
+});
+document.getElementById('zone_stretch').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.zone_stretch) : map.removeLayer(layers.zone_stretch);
+});
+document.getElementById('zone_outside').addEventListener('change', (e) => {
+    e.target.checked ? map.addLayer(layers.zone_outside) : map.removeLayer(layers.zone_outside);
+});
+
+L.control.scale({imperial: true, metric: false}).addTo(map);
+
+}; // End window.onload
+</script>
+</body>
+</html>

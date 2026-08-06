@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Home Search Map - Wilmington / Wyomissing / Exton-West Chester / Bryn Mawr</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+body { margin:0; padding:0; font-family: Arial, Helvetica, sans-serif; }
+#map { position:absolute; top:0; bottom:0; width:100%; }
+.layer-control { position:absolute; top:10px; right:10px; background:#fff; padding:12px;
+  border-radius:6px; box-shadow:0 0 15px rgba(0,0,0,.25); z-index:1000;
+  max-height:85vh; overflow-y:auto; -webkit-overflow-scrolling:touch; max-width:300px; }
+.layer-control h2 { margin:0 0 6px 0; font-size:15px; }
+.layer-control h3 { margin:14px 0 6px 0; font-size:13px; border-bottom:1px solid #ccc; padding-bottom:4px; }
+.layer-control label { display:block; margin:7px 0; cursor:pointer; font-size:13px; padding:4px; }
+.layer-control label:hover { background:#f5f5f5; }
+.layer-control input { margin-right:7px; width:17px; height:17px; vertical-align:middle; }
+.toggle-btn { background:#378ADD; color:#fff; border:none; padding:11px 14px; border-radius:5px;
+  cursor:pointer; font-size:14px; font-weight:bold; width:100%; display:block; }
+.toggle-btn:hover { background:#2a6bb5; }
+.layer-control-content.collapsed { display:none; }
+.legend { position:absolute; bottom:18px; left:10px; background:#fff; padding:10px 12px;
+  border-radius:6px; box-shadow:0 0 12px rgba(0,0,0,.25); z-index:1000; font-size:12px; }
+.legend div { margin:4px 0; }
+.sw { display:inline-block; width:13px; height:13px; border-radius:50%; margin-right:6px; vertical-align:middle; border:1px solid #666; }
+.leaflet-popup-content { font-size:13px; line-height:1.5; max-width:300px; }
+.leaflet-popup-content h3 { margin:0 0 4px 0; font-size:15px; }
+.tag { display:inline-block; padding:2px 7px; border-radius:3px; color:#fff; font-size:11px; font-weight:bold; }
+.pass { color:#1a7f37; font-weight:bold; }
+.fail { color:#c62828; font-weight:bold; }
+.warn { color:#b26a00; font-weight:bold; }
+.btn { display:inline-block; background:#006AFF; color:#fff !important; padding:5px 9px;
+  border-radius:4px; text-decoration:none; font-size:11px; margin:3px 4px 0 0; }
+.btn.rf { background:#C82021; }
+table.f { width:100%; border-collapse:collapse; margin:6px 0; }
+table.f td { padding:3px 4px; border-bottom:1px solid #eee; font-size:12px; }
+table.f td:first-child { color:#555; width:38%; }
+.cm { font-size:12px; margin:5px 0; }
+.cm td { padding:2px 5px; border-bottom:1px solid #f0f0f0; }
+@media (max-width:768px){ .layer-control{ top:10px; right:10px; left:10px; max-width:none;} .legend{display:none;} }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="layer-control" id="layerControl">
+<button class="toggle-btn" onclick="toggleLegend(); return false;">▼ Hide Layers</button>
+<div class="layer-control-content" id="layerContent">
+<h2>Home Search &mdash; 4 Work Sites</h2>
+
+<h3>Work Locations</h3>
+<label><input type="checkbox" id="work" checked> <strong>All 4 Work Sites</strong></label>
+<label><input type="checkbox" id="ring_wilm"> Wilmington 45-min ring</label>
+<label><input type="checkbox" id="ring_wyo"> Wyomissing 45-min ring</label>
+<label><input type="checkbox" id="ring_chesco"> Exton/W. Chester 30-min ring</label>
+<label><input type="checkbox" id="ring_bm"> Bryn Mawr 45-min ring</label>
+
+<h3>Candidate Home Areas</h3>
+<label><input type="checkbox" id="z_best" checked> <strong>Best Balance</strong> (Green)</label>
+<label><input type="checkbox" id="z_good" checked> <strong>Workable</strong> (Yellow)</label>
+<label><input type="checkbox" id="z_lean" checked> <strong>Leans One Way</strong> (Orange)</label>
+<label><input type="checkbox" id="z_out" checked> <strong>Fails a Site Badly</strong> (Red)</label>
+
+<h3>Optimal Location Score</h3>
+<label><input type="checkbox" id="score" checked> <strong>Ranked Score Badges</strong> (1&ndash;12)</label>
+
+<h3>Everyday Amenities</h3>
+<label><input type="checkbox" id="costco" checked> <strong>Costco Warehouses</strong></label>
+<label><input type="checkbox" id="parks" checked> <strong>Family Parks</strong></label>
+
+<h3>Reference</h3>
+<label><input type="checkbox" id="nuclear" checked> <strong>Limerick Buffers</strong> (10 &amp; 15mi)</label>
+<label><input type="checkbox" id="prior"> <strong>Prior Picks</strong></label>
+<div style="font-size:10px;color:#777;margin-top:10px;border-top:1px solid #eee;padding-top:6px;">
+Store &amp; park locations: places data &copy; Google
+</div>
+</div>
+</div>
+
+<div class="legend">
+<div><span class="sw" style="background:#27AE60"></span> Best balance across all 4</div>
+<div><span class="sw" style="background:#F1C40F"></span> Workable, one stretch</div>
+<div><span class="sw" style="background:#E67E22"></span> Leans toward one side</div>
+<div><span class="sw" style="background:#C0392B"></span> Fails a site badly</div>
+<div><span class="sw" style="background:#FF6600"></span> Work location</div>
+</div>
+
+<script>
+var map = L.map('map').setView([40.03,-75.60], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom:18, attribution:'&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+function toggleLegend(){
+  var c=document.getElementById('layerContent');
+  var b=document.querySelector('.toggle-btn');
+  c.classList.toggle('collapsed');
+  b.innerHTML = c.classList.contains('collapsed') ? '▲ Show Layers' : '▼ Hide Layers';
+}
+
+function links(q){
+  var e=encodeURIComponent(q);
+  return '<a class="btn" target="_blank" href="https://www.zillow.com/homes/'+e+'_rb/">Zillow</a>'+
+         '<a class="btn rf" target="_blank" href="https://www.redfin.com/city/search?query='+e+'">Redfin</a>';
+}
+
+function zone(o){
+  var c = L.circle([o.lat,o.lng], {radius:o.radius, color:o.color, fillColor:o.color, fillOpacity:0.22, weight:3});
+  var h = '<h3>'+o.name+'</h3>'+
+    '<div><span class="tag" style="background:'+o.color+'">'+o.verdict+'</span></div>'+
+    '<table class="f">'+
+    '<tr><td>County</td><td>'+o.county+'</td></tr>'+
+    '<tr><td>School district</td><td>'+o.sd+'</td></tr>'+
+    '<tr><td>Rank / tier</td><td>'+o.rank+'</td></tr>'+
+    '<tr><td>Price range</td><td>'+o.price+'</td></tr>'+
+    '<tr><td>Typical lot</td><td>'+o.lot+'</td></tr>'+
+    '<tr><td>New construction</td><td>'+o.nc+'</td></tr>'+
+    '<tr><td>Limerick distance</td><td>'+o.lim+'</td></tr>'+
+    '</table>'+
+    '<div style="font-weight:bold;font-size:12px;margin-top:6px;">Drive to each work site</div>'+
+    '<table class="cm">'+
+    '<tr><td>Wilmington DE</td><td>'+o.wilm+'</td></tr>'+
+    '<tr><td>Wyomissing PA</td><td>'+o.wyo+'</td></tr>'+
+    '<tr><td>Exton PA</td><td>'+o.ext+'</td></tr>'+
+    '<tr><td>West Chester PA</td><td>'+o.wc+'</td></tr>'+
+    '<tr><td>Bryn Mawr PA</td><td>'+o.bm+'</td></tr>'+
+    '</table>'+
+    '<div style="margin:6px 0; font-size:12px;"><strong>Bottom line:</strong> '+o.note+'</div>'+
+    links(o.query);
+  c.bindPopup(h, {maxWidth:330});
+  return c;
+}
+
+// ================= BEST BALANCE =================
+var gBest = L.layerGroup([
+  zone({
+    name:'Downingtown / Chester Springs', county:'Chester County', lat:40.0350, lng:-75.6750, radius:5200,
+    color:'#27AE60', verdict:'BEST OVERALL BALANCE',
+    sd:'Downingtown Area SD',
+    rank:'<strong>#16 in PA</strong> &mdash; Tier 1. 69% math / 74% reading. STEM Academy is #5 public HS in PA; Downingtown East #20',
+    price:'$650k&ndash;$1.1M', lot:'0.3&ndash;0.75 acres &mdash; larger toward Chester Springs',
+    nc:'<strong>Yes &mdash; strong builder activity</strong> (Toll Brothers, NVR, regional)',
+    lim:'<span class="pass">16.4 mi (Downingtown) &#10003;</span> / 10.0 mi (Chester Springs) &#9888;',
+    wilm:'<span class="pass">35&ndash;45 min &#10003;</span>',
+    wyo:'<span class="warn">50&ndash;60 min</span>',
+    ext:'<span class="pass">10&ndash;15 min &#10003;&#10003;</span>',
+    wc:'<span class="pass">15&ndash;20 min &#10003;&#10003;</span>',
+    bm:'<span class="warn">40&ndash;50 min</span>',
+    note:'The single best answer now that Harleysville is gone. Better schools than West Chester Area SD on raw proficiency, real new-construction inventory in your budget, Downingtown proper sits outside the Limerick 15-mile buffer, and it is the only place that keeps Wyomissing under an hour while staying under 45 to Wilmington.',
+    query:'Downingtown, PA'
+  }),
+  zone({
+    name:'Exton / Lionville', county:'Chester County', lat:40.0430, lng:-75.6360, radius:4000,
+    color:'#27AE60', verdict:'TIGHTEST TO 3 OF 4 SITES',
+    sd:'West Chester Area SD &amp; Downingtown Area SD (splits by parcel)',
+    rank:'WCASD <strong>#25 in PA</strong>; DASD <strong>#16 in PA</strong> &mdash; both Tier 1',
+    price:'$650k&ndash;$1.1M', lot:'0.25&ndash;0.5 acres',
+    nc:'Yes &mdash; good inventory along the Rt 100 / Rt 113 corridor',
+    lim:'<span class="warn">12&ndash;14 mi &mdash; inside 15mi buffer</span>',
+    wilm:'<span class="pass">35&ndash;45 min &#10003;</span>',
+    wyo:'<span class="warn">45&ndash;55 min</span>',
+    ext:'<span class="pass">0&ndash;10 min &#10003;&#10003;&#10003;</span>',
+    wc:'<span class="pass">15 min &#10003;&#10003;</span>',
+    bm:'<span class="warn">35&ndash;45 min</span>',
+    note:'Geographic dead center of your four sites. Downside is the Limerick buffer &mdash; Lionville is ~12 miles out. Verify school district by street address here: the WCASD/DASD line runs through this area and both are Tier 1, so either outcome is fine, but know which one you are buying.',
+    query:'Exton, PA'
+  }),
+  zone({
+    name:'Glenmoore &mdash; Wallace Township', county:'Chester County', lat:40.0851, lng:-75.7735, radius:3400,
+    color:'#27AE60', verdict:'TIED FOR BEST &mdash; DASD WITH ACREAGE',
+    sd:'Downingtown Area SD &mdash; Springton Manor Elementary',
+    rank:'<strong>#16 in PA.</strong> Springton Manor: 71% math / 80% reading, and <strong>92.5% science</strong> vs a 65.8% state average',
+    price:'$600k&ndash;$1.0M', lot:'<strong>0.5&ndash;2+ acres &mdash; largest lots of any top-tier option</strong>',
+    nc:'Yes &mdash; custom and semi-custom on larger parcels',
+    lim:'<span class="warn">13.9 mi &mdash; just inside 15mi buffer</span>',
+    wilm:'<span class="warn">45&ndash;55 min</span>',
+    wyo:'<span class="pass">40&ndash;50 min &#10003; (best of any workable area)</span>',
+    ext:'<span class="pass">20 min &#10003;&#10003;</span>',
+    wc:'<span class="pass">25&ndash;30 min &#10003;</span>',
+    bm:'<span class="fail">45&ndash;55 min &#10007;</span>',
+    note:'<strong>Wallace Township feeds Downingtown Area SD, not Owen J. Roberts.</strong> Springton Manor &rarr; Marsh Creek &rarr; Downingtown Middle &rarr; Downingtown West, with the STEM Academy open by application. Same #16 district as Downingtown proper, twice the land, lower price, and the shortest Wyomissing run on the map. Bryn Mawr is the sacrifice.',
+    query:'Glenmoore, PA'
+  })
+]);
+
+// ================= WORKABLE =================
+var gGood = L.layerGroup([
+  zone({
+    name:'West Chester Borough / East &amp; West Goshen', county:'Chester County', lat:39.9601, lng:-75.6055, radius:4800,
+    color:'#F1C40F', verdict:'BEST WILMINGTON, WORST WYOMISSING',
+    sd:'West Chester Area SD',
+    rank:'#25 in PA &mdash; Tier 1 borderline. Rustin HS #26, Henderson #30, East #41',
+    price:'$700k&ndash;$1.2M', lot:'0.25&ndash;0.6 acres; more land south and west',
+    nc:'Yes &mdash; active communities in Westtown and East Goshen',
+    lim:'<span class="pass">18.4 mi &mdash; outside buffer &#10003;</span>',
+    wilm:'<span class="pass">30&ndash;40 min &#10003;&#10003;</span>',
+    wyo:'<span class="fail">60&ndash;70 min &#10007;</span>',
+    ext:'<span class="pass">12&ndash;15 min &#10003;&#10003;</span>',
+    wc:'<span class="pass">0&ndash;10 min &#10003;&#10003;&#10003;</span>',
+    bm:'<span class="warn">35&ndash;45 min</span>',
+    note:'Wins outright if Wyomissing drops off the list. Outside the Limerick buffer, shortest Wilmington drive of any Tier 1 area, and you are living in the town you would work in. Wyomissing at 60&ndash;70 min is the only real problem.',
+    query:'West Chester, PA'
+  }),
+  zone({
+    name:'Malvern / Frazer / Great Valley', county:'Chester County', lat:40.0400, lng:-75.5320, radius:3400,
+    color:'#F1C40F', verdict:'BEST BRYN MAWR ACCESS IN CHESCO',
+    sd:'Great Valley SD',
+    rank:'~#30&ndash;35 in PA &mdash; <strong>Tier 2 strong</strong>',
+    price:'$750k&ndash;$1.3M', lot:'0.3&ndash;0.75 acres',
+    nc:'Some &mdash; smaller infill communities, fewer large developments',
+    lim:'<span class="warn">13 mi &mdash; just inside 15mi buffer</span>',
+    wilm:'<span class="pass">35&ndash;45 min &#10003;</span>',
+    wyo:'<span class="fail">55&ndash;65 min &#10007;</span>',
+    ext:'<span class="pass">10 min &#10003;&#10003;&#10003;</span>',
+    wc:'<span class="pass">15&ndash;20 min &#10003;&#10003;</span>',
+    bm:'<span class="pass">25&ndash;35 min &#10003;</span>',
+    note:'The Rt 30 / Rt 202 position gives you the shortest Bryn Mawr run of any Chester County option. Trade-offs are Tier 2 rather than Tier 1 schools, a higher price per square foot, and thinner new-construction inventory.',
+    query:'Malvern, PA'
+  }),
+  zone({
+    name:'Thorndale / Caln Township', county:'Chester County', lat:39.9868, lng:-75.7629, radius:3600,
+    color:'#C0392B', verdict:'CORRECTED &mdash; COATESVILLE SD, NOT DASD',
+    sd:'Coatesville Area SD (entire township)',
+    rank:'<strong>Bottom quartile in PA.</strong> Caln Elementary: 22% math / 32% reading, Niche C+, GreatSchools 5/10',
+    price:'$400k&ndash;$750k &mdash; cheapest option with workable commutes',
+    lot:'0.35&ndash;1.0 acres', nc:'Yes &mdash; more available land than points east',
+    lim:'<span class="pass">19 mi &mdash; outside buffer &#10003;</span>',
+    wilm:'<span class="pass">35&ndash;45 min &#10003;</span>',
+    wyo:'<span class="warn">50&ndash;60 min</span>',
+    ext:'<span class="pass">15&ndash;20 min &#10003;&#10003;</span>',
+    wc:'<span class="pass">20 min &#10003;&#10003;</span>',
+    bm:'<span class="fail">45&ndash;55 min &#10007;</span>',
+    note:'<strong>Correction: there is no Downingtown-zoned portion of Caln Township.</strong> Coatesville Area SD covers all nine of its municipalities including Caln in full. Watch the postal-address trap here &mdash; homes in Caln Township carry Downingtown 19335 mailing addresses while feeding Coatesville schools, and Downingtown High School West sits partly in Caln Township without serving it.',
+    query:'Thorndale, PA'
+  }),
+  zone({
+    name:'Glenmoore &mdash; Nantmeal side (Owen J. Roberts)', county:'Chester County', lat:40.1150, lng:-75.8050, radius:3200,
+    color:'#F1C40F', verdict:'BIG LOTS, WEAKER SCHOOLS',
+    sd:'Owen J. Roberts SD',
+    rank:'~#55&ndash;65 in PA &mdash; <strong>Tier 2/3</strong>',
+    price:'$600k&ndash;$1.0M', lot:'<strong>0.5&ndash;2+ acres</strong>',
+    nc:'Yes &mdash; custom and semi-custom on larger parcels',
+    lim:'<span class="warn">14 mi &mdash; just inside 15mi buffer</span>',
+    wilm:'<span class="warn">45&ndash;55 min</span>',
+    wyo:'<span class="pass">40&ndash;50 min &#10003;</span>',
+    ext:'<span class="pass">20 min &#10003;&#10003;</span>',
+    wc:'<span class="pass">25&ndash;30 min &#10003;</span>',
+    bm:'<span class="fail">45&ndash;55 min &#10007;</span>',
+    note:'East and West Nantmeal Townships feed Owen J. Roberts. Same land and same commutes as the Wallace side, materially weaker schools. <strong>The township line is the whole difference here.</strong>',
+    query:'Glenmoore, PA'
+  })
+]);
+
+// ================= LEANS ONE WAY =================
+var gLean = L.layerGroup([
+  zone({
+    name:'Wayne / Devon / Berwyn', county:'Chester &amp; Delaware County', lat:40.0440, lng:-75.3877, radius:3600,
+    color:'#E67E22', verdict:'ELITE SCHOOLS / WYOMISSING FAILS',
+    sd:'Tredyffrin-Easttown SD &amp; Radnor Township SD',
+    rank:'<strong>T/E is #2 in PA</strong>. Radnor top 10. Both Tier 1 Elite',
+    price:'<span class="fail">$800k&ndash;$1.8M &mdash; often above budget</span>',
+    lot:'0.3&ndash;0.7 acres', nc:'Rare &mdash; mostly teardown/rebuild',
+    lim:'<span class="pass">16.4 mi &mdash; outside buffer &#10003;</span>',
+    wilm:'<span class="warn">40&ndash;50 min</span>',
+    wyo:'<span class="fail">65&ndash;75 min &#10007;&#10007;</span>',
+    ext:'<span class="pass">25 min &#10003;</span>',
+    wc:'<span class="pass">25&ndash;30 min &#10003;</span>',
+    bm:'<span class="pass">10&ndash;15 min &#10003;&#10003;&#10003;</span>',
+    note:'The strongest schools reachable from more than one of your sites. Priced high, almost no new construction, and Wyomissing is out of reach at 65&ndash;75 min. Worth it only if Bryn Mawr and Exton are the real jobs.',
+    query:'Wayne, PA'
+  }),
+  zone({
+    name:'Kennett Square / Unionville', county:'Chester County', lat:39.8468, lng:-75.7113, radius:4200,
+    color:'#E67E22', verdict:'WILMINGTON-OPTIMIZED',
+    sd:'Unionville-Chadds Ford SD',
+    rank:'<strong>Top 10 in PA</strong> &mdash; Tier 1 Elite',
+    price:'$700k&ndash;$1.3M', lot:'<strong>0.5&ndash;2+ acres</strong>',
+    nc:'Some &mdash; limited but present',
+    lim:'<span class="pass">27 mi &mdash; well outside buffer &#10003;&#10003;</span>',
+    wilm:'<span class="pass">20&ndash;30 min &#10003;&#10003;&#10003;</span>',
+    wyo:'<span class="fail">65&ndash;75 min &#10007;&#10007;</span>',
+    ext:'<span class="warn">30 min</span>',
+    wc:'<span class="pass">20&ndash;25 min &#10003;&#10003;</span>',
+    bm:'<span class="fail">45&ndash;55 min &#10007;</span>',
+    note:'Elite schools, big lots, furthest from Limerick of anywhere on the map, and the best Wilmington commute available. Pure Delaware-facing play &mdash; Wyomissing and Bryn Mawr are both out.',
+    query:'Kennett Square, PA'
+  }),
+  zone({
+    name:'Phoenixville', county:'Chester County', lat:40.1304, lng:-75.5149, radius:3400,
+    color:'#E67E22', verdict:'CENTRAL BUT NUCLEAR-CLOSE',
+    sd:'Phoenixville Area SD',
+    rank:'~#90&ndash;110 in PA &mdash; <strong>Tier 3</strong>',
+    price:'$500k&ndash;$900k', lot:'0.2&ndash;0.5 acres',
+    nc:'Yes &mdash; substantial redevelopment and new builds',
+    lim:'<span class="fail">7.6 mi &mdash; inside the 10-mile EPZ</span>',
+    wilm:'<span class="warn">45&ndash;55 min</span>',
+    wyo:'<span class="warn">50&ndash;60 min</span>',
+    ext:'<span class="pass">20 min &#10003;&#10003;</span>',
+    wc:'<span class="pass">25&ndash;30 min &#10003;</span>',
+    bm:'<span class="pass">30&ndash;40 min &#10003;</span>',
+    note:'Splits the difference on distance and has real new construction, but the schools are the weakest of any Chester County option and it sits inside the 10-mile emergency planning zone. Included for completeness rather than as a recommendation.',
+    query:'Phoenixville, PA'
+  })
+]);
+
+// ================= FAILS BADLY =================
+var gOut = L.layerGroup([
+  zone({
+    name:'Royersford / Upper Providence', county:'Montgomery County', lat:40.1840, lng:-75.5380, radius:3200,
+    color:'#C0392B', verdict:'FALLS OFF WITHOUT HARLEYSVILLE',
+    sd:'Spring-Ford Area SD',
+    rank:'#36 in PA &mdash; Tier 2',
+    price:'$700k&ndash;$1.1M', lot:'0.3&ndash;0.5 acres',
+    nc:'Yes &mdash; Toll Brothers Canterbury Meadows, Hearthfield, Linden Ridge',
+    lim:'<span class="fail">3.9 mi &mdash; deep inside the 10-mile EPZ</span>',
+    wilm:'<span class="fail">55&ndash;70 min &#10007;</span>',
+    wyo:'<span class="warn">45&ndash;55 min</span>',
+    ext:'<span class="pass">25 min &#10003;</span>',
+    wc:'<span class="warn">30&ndash;40 min</span>',
+    bm:'<span class="warn">35&ndash;45 min</span>',
+    note:'This area only made sense because of Harleysville. With that gone, its whole case collapses: worst Wilmington drive of any candidate, Tier 2 schools, and under 4 miles from Limerick. Downingtown gives you better schools, a shorter Wilmington run, and a real buffer from the plant at a similar price.',
+    query:'Royersford, PA'
+  }),
+  zone({
+    name:'Pottstown / Douglassville / Birdsboro', county:'Montgomery &amp; Berks', lat:40.2550, lng:-75.7000, radius:5000,
+    color:'#C0392B', verdict:'WYOMISSING-ONLY',
+    sd:'Pottsgrove / Daniel Boone SD',
+    rank:'Tier 3&ndash;4',
+    price:'$350k&ndash;$650k', lot:'0.4&ndash;1.5 acres',
+    nc:'Yes &mdash; plenty of land',
+    lim:'<span class="fail">3.6&ndash;9 mi &mdash; inside the 10-mile EPZ</span>',
+    wilm:'<span class="fail">65&ndash;80 min &#10007;&#10007;</span>',
+    wyo:'<span class="pass">25&ndash;35 min &#10003;&#10003;</span>',
+    ext:'<span class="warn">30&ndash;35 min</span>',
+    wc:'<span class="fail">40&ndash;50 min &#10007;</span>',
+    bm:'<span class="fail">50&ndash;60 min &#10007;</span>',
+    note:'Cheapest land anywhere in range and a short hop to Wyomissing, but it fails Wilmington outright, has the weakest schools on the map, and sits closest to Limerick. Only viable if Wyomissing becomes your sole job.',
+    query:'Pottstown, PA'
+  }),
+  zone({
+    name:'Wyomissing / West Reading (live-at-work)', county:'Berks County', lat:40.3298, lng:-75.9652, radius:3800,
+    color:'#C0392B', verdict:'WYOMISSING-ONLY',
+    sd:'Wyomissing Area SD',
+    rank:'#35 in PA &mdash; Tier 2, #1 in Berks',
+    price:'$400k&ndash;$750k', lot:'0.25&ndash;0.75 acres',
+    nc:'Limited &mdash; mostly Spring Ridge and regional builders',
+    lim:'<span class="pass">21 mi &mdash; outside buffer &#10003;</span>',
+    wilm:'<span class="fail">80&ndash;95 min &#10007;&#10007;&#10007;</span>',
+    wyo:'<span class="pass">0&ndash;10 min &#10003;&#10003;&#10003;</span>',
+    ext:'<span class="fail">50&ndash;60 min &#10007;</span>',
+    wc:'<span class="fail">60&ndash;70 min &#10007;</span>',
+    bm:'<span class="fail">70&ndash;80 min &#10007;&#10007;</span>',
+    note:'Living next to the Wyomissing job means giving up every other site. Good schools and strong value on its own terms, but it is the far corner of your map in every direction.',
+    query:'Wyomissing, PA'
+  })
+]);
+
+// ================= WORK LOCATIONS =================
+function workIcon(label, sz){
+  sz = sz || 54;
+  return L.divIcon({className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], html:
+    '<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:#FF6600;border:4px solid #fff;'+
+    'box-shadow:0 2px 8px rgba(0,0,0,.55);color:#fff;font-weight:bold;font-size:10px;'+
+    'display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1;">'+label+'</div>'});
+}
+var gWork = L.layerGroup([
+  L.marker([39.7459,-75.5466], {icon:workIcon('WORK<br>Wilming-<br>ton')})
+    .bindPopup('<h3>Wilmington, DE</h3><div style="font-size:12px">Work site &mdash; southern anchor. Reachable in 20&ndash;45 min from all of Chester County.</div>'),
+  L.marker([40.3298,-75.9652], {icon:workIcon('WORK<br>Wyomis-<br>sing')})
+    .bindPopup('<h3>Wyomissing, PA</h3><div style="font-size:12px">Work site &mdash; northwestern anchor. <strong>This is the binding constraint.</strong> Nothing within 45 min of Wilmington is within 45 min of here.</div>'),
+  L.marker([40.0293,-75.6207], {icon:workIcon('WORK<br>Exton')})
+    .bindPopup('<h3>Exton, PA</h3><div style="font-size:12px">Work site &mdash; central. Easiest of the four to be near.</div>'),
+  L.marker([39.9601,-75.6055], {icon:workIcon('WORK<br>W.Chest-<br>er')})
+    .bindPopup('<h3>West Chester, PA</h3><div style="font-size:12px">Work site &mdash; 8 miles from Exton, so the two effectively function as one anchor.</div>'),
+  L.marker([40.0218,-75.3163], {icon:workIcon('WORK<br>Bryn<br>Mawr')})
+    .bindPopup('<h3>Bryn Mawr, PA</h3><div style="font-size:12px">Work site &mdash; eastern anchor. Pulls against Wyomissing.</div>')
+]);
+
+// ================= RINGS =================
+var ringWilm = L.layerGroup([L.circle([39.7459,-75.5466], {radius:48000, color:'#1565c0', fill:false, weight:2, dashArray:'6,8'}).bindPopup('Approx. 45-min drive from Wilmington')]);
+var ringWyo  = L.layerGroup([L.circle([40.3298,-75.9652], {radius:48000, color:'#6a1b9a', fill:false, weight:2, dashArray:'6,8'}).bindPopup('Approx. 45-min drive from Wyomissing')]);
+var ringChes = L.layerGroup([
+  L.circle([40.0293,-75.6207], {radius:30000, color:'#2e7d32', fill:false, weight:2, dashArray:'6,8'}).bindPopup('Approx. 30-min drive from Exton'),
+  L.circle([39.9601,-75.6055], {radius:30000, color:'#2e7d32', fill:false, weight:2, dashArray:'6,8'}).bindPopup('Approx. 30-min drive from West Chester')
+]);
+var ringBM   = L.layerGroup([L.circle([40.0218,-75.3163], {radius:48000, color:'#00838f', fill:false, weight:2, dashArray:'6,8'}).bindPopup('Approx. 45-min drive from Bryn Mawr')]);
+
+// ================= NUCLEAR =================
+var gNuke = L.layerGroup([
+  L.circle([40.2264,-75.5869], {radius:24140, color:'#c62828', fillColor:'#c62828', fillOpacity:0.06, weight:2, dashArray:'8,6'})
+    .bindPopup('<h3>Limerick &mdash; 15-mile buffer</h3><div style="font-size:12px">Your stated preference.</div>'),
+  L.circle([40.2264,-75.5869], {radius:16093, color:'#c62828', fillColor:'#c62828', fillOpacity:0.10, weight:2})
+    .bindPopup('<h3>Limerick &mdash; 10-mile EPZ</h3><div style="font-size:12px">Federal emergency planning zone. Royersford (3.9 mi), Pottstown (3.6 mi), Collegeville (7.6 mi) and Phoenixville (7.6 mi) are all inside.</div>'),
+  L.marker([40.2264,-75.5869]).bindPopup('<h3>Limerick Generating Station</h3>')
+]);
+
+// ================= PRIOR PICKS =================
+var gPrior = L.layerGroup([
+  L.marker([40.1770,-75.5240]).bindPopup(
+    '<h3>129 Wildflower Way &mdash; Canterbury Meadows</h3>'+
+    '<div style="font-size:12px"><strong>$999,000</strong> &middot; Toll Brothers &middot; 0.46 ac &middot; Spring-Ford SD<br>'+
+    '<span class="fail">Wilmington: 55&ndash;70 min &mdash; now fails</span><br>'+
+    '<span class="fail">Limerick: ~5 mi &mdash; inside the 10-mile EPZ</span><br><br>'+
+    'Without Harleysville this loses its main advantage.</div>'),
+  L.marker([40.1420,-75.4030]).bindPopup(
+    '<h3>Village at Eskie Park &mdash; Trooper</h3>'+
+    '<div style="font-size:12px">D.R. Horton &middot; Methacton SD (#83)<br>'+
+    '<span class="fail">Wilmington: 55&ndash;65 min</span> &middot; Limerick 11.3 mi<br>Same problem &mdash; built around a job that is no longer on the list.</div>')
+]);
+
+// ================= OPTIMAL LOCATION SCORE =================
+// Weights: commute 40% / schools 35% / price 25%, minus a Limerick-proximity penalty (max -2.0).
+// Exton and West Chester are averaged as one job since the two offices are 8 miles apart.
+var scored = [
+ {r:1,  s:6.23, n:'Downingtown / Chester Springs', lat:40.0350, lng:-75.6750, c:5.5, sc:8.5, p:6.1, nu:-0.5,
+  avg:39, mx:55, price:'~$875k median', sd:'Downingtown Area SD #16 in PA',
+  cav:'<strong>Co-leader.</strong> Strong on every axis without being best on any single one. Outside the 15-mile Limerick buffer at 16.4 miles, which Chester Springs and Wallace are not.'},
+ {r:1,  s:6.23, n:'Glenmoore &mdash; Wallace Township', lat:40.0851, lng:-75.7735, c:5.7, sc:8.5, p:7.1, nu:-0.8,
+  avg:42, mx:50, price:'~$800k median', sd:'Downingtown Area SD #16 &mdash; Springton Manor',
+  cav:'<strong>Co-leader, corrected upward from 4.67.</strong> Wallace Township feeds DASD, not Owen J. Roberts. Same district as Downingtown with double the acreage, a lower price, and the best worst-case commute on the map at 50 minutes. Bryn Mawr at 45&ndash;55 min is the cost.'},
+ {r:3,  s:6.02, n:'Exton / Lionville', lat:40.0430, lng:-75.6360, c:6.7, sc:8.1, p:6.1, nu:-1.0,
+  avg:35, mx:50, price:'~$875k median', sd:'West Chester Area SD #25 / Downingtown Area SD #16',
+  cav:'<strong>Best raw commute score</strong> at 35 min average. Loses to the co-leaders only on the Limerick penalty at 12.5 miles.'},
+ {r:4,  s:5.56, n:'Kennett Square / Unionville', lat:39.8468, lng:-75.7113, c:3.1, sc:9.3, p:4.3, nu:0.0,
+  avg:43, mx:70, price:'~$1.0M median', sd:'Unionville-Chadds Ford, top 10 in PA',
+  cav:'Second-best schools and <strong>zero nuclear penalty</strong> at 27 miles. Carried by schools and safety despite a 70-minute worst case.'},
+ {r:5,  s:5.48, n:'West Chester / Goshen', lat:39.9601, lng:-75.6055, c:4.5, sc:7.6, p:5.0, nu:-0.2,
+  avg:38, mx:65, price:'~$950k median', sd:'West Chester Area SD #25 in PA',
+  cav:'<strong>Jumps to #1 if Wyomissing comes off the list.</strong> The 65-minute Wyomissing leg is the only thing holding it back.'},
+ {r:6,  s:5.00, n:'Wyomissing (live at work)', lat:40.3298, lng:-75.9652, c:0.5, sc:6.6, p:10.0, nu:0.0,
+  avg:57, mx:87, price:'~$575k median', sd:'Wyomissing Area SD #35 in PA',
+  cav:'Mid-pack only because price and schools are genuinely good. <strong>Commute score of 0.5 is the lowest on the map</strong> &mdash; a one-job answer.'},
+ {r:7,  s:4.67, n:'Glenmoore &mdash; Nantmeal side', lat:40.1150, lng:-75.8050, c:5.7, sc:4.1, p:7.1, nu:-0.8,
+  avg:42, mx:50, price:'~$800k median', sd:'Owen J. Roberts SD ~#60 in PA',
+  cav:'Identical land and commutes to Wallace Township, 4.4 points lower on schools. <strong>The township line is worth 1.5 points of total score.</strong>'},
+ {r:8,  s:4.55, n:'Malvern / Great Valley', lat:40.0400, lng:-75.5320, c:5.3, sc:6.8, p:3.9, nu:-0.9,
+  avg:36, mx:60, price:'~$1.03M median', sd:'Great Valley SD ~#33 in PA',
+  cav:'Good commute geometry undercut by price &mdash; a Tier 1 premium for Tier 2 schools.'},
+ {r:9,  s:4.48, n:'Thorndale / Caln Township', lat:39.9868, lng:-75.7629, c:5.2, sc:0.0, p:10.0, nu:-0.1,
+  avg:41, mx:55, price:'~$575k median', sd:'Coatesville Area SD &mdash; bottom quartile in PA',
+  cav:'<strong>Corrected down from 7.43, which was the top of the list.</strong> I had assumed a Downingtown-zoned portion of Caln Township existed. It does not &mdash; Coatesville Area SD covers Caln in full. The school score goes from 8.5 to 0.'},
+ {r:10, s:4.46, n:'Wayne / Devon / Berwyn', lat:40.0440, lng:-75.3877, c:3.7, sc:9.9, p:0.0, nu:-0.5,
+  avg:38, mx:70, price:'~$1.3M median', sd:'Tredyffrin-Easttown #2 in PA',
+  cav:'<strong>Best schools in the state and a price score of zero.</strong> Median sits above your ceiling and new construction is effectively nonexistent.'},
+ {r:11, s:3.18, n:'Royersford / Upper Providence', lat:40.1840, lng:-75.5380, c:3.7, sc:6.5, p:5.7, nu:-2.0,
+  avg:46, mx:62, price:'~$900k median', sd:'Spring-Ford Area SD #36 in PA',
+  cav:'<strong>Maximum nuclear penalty at 3.9 miles.</strong> Led the field under the old Harleysville criteria; drops here once that job is removed.'},
+ {r:12, s:2.61, n:'Phoenixville', lat:40.1304, lng:-75.5149, c:5.2, sc:0.1, p:8.6, nu:-1.7,
+  avg:41, mx:55, price:'~$700k median', sd:'Phoenixville Area SD ~#100 in PA',
+  cav:'Decent commute and price, weakest schools in Chester County, heavy nuclear penalty inside the 10-mile zone.'},
+ {r:13, s:1.28, n:'Pottstown / Douglassville', lat:40.2550, lng:-75.7000, c:1.9, sc:0.0, p:10.0, nu:-2.0,
+  avg:49, mx:72, price:'~$500k median', sd:'Pottsgrove / Daniel Boone, Tier 3&ndash;4',
+  cav:'Cheapest land in range and nothing else. Last on schools, last on nuclear distance, second-last on commute.'}
+];
+
+var gScore = L.layerGroup();
+scored.forEach(function(o){
+  var col = o.s>=6 ? '#1B7F3B' : (o.s>=4.5 ? '#D4930A' : (o.s>=3 ? '#D2691E' : '#A02020'));
+  var m = L.marker([o.lat,o.lng], {icon:L.divIcon({className:'', iconSize:[46,46], iconAnchor:[23,23], html:
+    '<div style="width:46px;height:46px;border-radius:50%;background:'+col+';border:3px solid #fff;'+
+    'box-shadow:0 2px 7px rgba(0,0,0,.5);color:#fff;display:flex;flex-direction:column;'+
+    'align-items:center;justify-content:center;line-height:1;">'+
+    '<div style="font-size:15px;font-weight:bold;">#'+o.r+'</div>'+
+    '<div style="font-size:9px;opacity:.9;">'+o.s.toFixed(1)+'</div></div>'})});
+  m.bindPopup(
+    '<h3>#'+o.r+' &mdash; '+o.n+'</h3>'+
+    '<div style="font-size:20px;font-weight:bold;color:'+col+';margin:2px 0 6px 0;">'+o.s.toFixed(2)+' / 10</div>'+
+    '<table class="cm">'+
+    '<tr><td>Commute (40%)</td><td><strong>'+o.c.toFixed(1)+'</strong> &mdash; '+o.avg+' min avg, '+o.mx+' min worst</td></tr>'+
+    '<tr><td>Schools (35%)</td><td><strong>'+o.sc.toFixed(1)+'</strong> &mdash; '+o.sd+'</td></tr>'+
+    '<tr><td>Price (25%)</td><td><strong>'+o.p.toFixed(1)+'</strong> &mdash; '+o.price+'</td></tr>'+
+    '<tr><td>Limerick penalty</td><td><strong>'+o.nu.toFixed(1)+'</strong></td></tr>'+
+    '</table>'+
+    '<div style="font-size:12px;margin-top:6px;">'+o.cav+'</div>', {maxWidth:330});
+  gScore.addLayer(m);
+});
+
+// ================= COSTCO =================
+var cartIcon = L.divIcon({className:'', iconSize:[38,38], iconAnchor:[19,19], html:
+  '<div style="width:38px;height:38px;border-radius:8px;background:rgba(0,80,160,0.78);border:2px solid rgba(255,255,255,0.9);'+
+  'box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:20px;">&#128722;</div>'});
+var gCostco = L.layerGroup([
+  L.marker([39.8896,-75.5323],{icon:cartIcon}).bindPopup('<h3>Costco &mdash; Glen Mills (Concordville)</h3><div style="font-size:12px">700 Evergreen Dr, Glen Mills PA 19342<br>Gas station on site.<br><br><strong>Nearest to:</strong> West Chester (~20 min), Kennett Square (~20 min), Malvern (~25 min)</div>'),
+  L.marker([40.0914,-75.3868],{icon:cartIcon}).bindPopup('<h3>Costco &mdash; King of Prussia</h3><div style="font-size:12px">201 Allendale Rd, King of Prussia PA 19406<br><br><strong>Nearest to:</strong> Wayne/Devon (~12 min), Malvern (~18 min), Phoenixville (~20 min)</div>'),
+  L.marker([40.2389,-75.5745],{icon:cartIcon}).bindPopup('<h3>Costco &mdash; Pottstown</h3><div style="font-size:12px">14 Lightcap Rd, Pottstown PA 19464<br>Gas station on site.<br><br><strong>Nearest to:</strong> Royersford (~12 min), Glenmoore (~20 min), Chester Springs (~22 min)</div>'),
+  L.marker([39.6771,-75.6474],{icon:cartIcon}).bindPopup('<h3>Costco &mdash; Newark, DE</h3><div style="font-size:12px">900 Center Blvd S, Newark DE 19702<br><strong>No Delaware sales tax.</strong><br><br><strong>Nearest to:</strong> Kennett Square (~25 min), and it is right off I-95 on the Wilmington run</div>')
+]);
+
+// ================= PARKS =================
+var treeIcon = L.divIcon({className:'', iconSize:[34,34], iconAnchor:[17,17], html:
+  '<div style="width:34px;height:34px;border-radius:50%;background:rgba(30,120,60,0.62);border:2px solid rgba(255,255,255,0.85);'+
+  'box-shadow:0 1px 5px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:17px;">&#127794;</div>'});
+function park(lat,lng,name,desc){
+  return L.marker([lat,lng],{icon:treeIcon}).bindPopup('<h3>&#127794; '+name+'</h3><div style="font-size:12px">'+desc+'</div>');
+}
+var gParks = L.layerGroup([
+  park(40.0096,-75.7058,'Kerr Park, Downingtown','Fenced playground with a single entry point, skate park, basketball courts, disc golf, creek trail. Hosts a farmers market and a July 4th fair.'),
+  park(40.0214,-75.6808,'Bell Tavern Park, Downingtown','Splash pad, separate toddler area, tennis, volleyball, basketball, grills and pavilions. Dog friendly. Close to Rt 30 so there is some road noise.'),
+  park(40.0048,-75.7236,'Lloyd Park, Downingtown','Large off-leash dog park with creek access and wooded trails. Note it is not fully fenced.'),
+  park(40.0478,-75.7084,'Dowlin Forge Park, Downingtown','Long paved creekside trail, good for strollers and bikes. Quiet and shaded.'),
+  park(40.0692,-75.7198,'Marsh Creek State Park, Downingtown','1,700-acre lake with boat rental, small beach area, public pool, and extensive hiking. The big weekend destination for this corridor.'),
+  park(40.0406,-75.6030,'Exton Park','Zipline, multiple age-graded playgrounds, pond loop and bird sanctuary, connects to the Chester Valley Trail. Restrooms and ample parking.'),
+  park(40.0546,-75.6621,'Imagination Street, Lionville','Indoor pretend-play space and birthday party venue. Useful for winter.'),
+  park(40.0480,-75.6366,'Puffy Park, Exton','Large indoor playground with ball pit, toddler zone and role-play areas.'),
+  park(40.0026,-75.5404,'East Goshen Township Park','Recently renovated playground on rubber surfacing with age-separated structures, accessible swings, sand play area. Tennis, pickleball, sand volleyball, mile-long paved loop, evening farmers market.'),
+  park(39.9536,-75.6117,'Everhart Park, West Chester','Neighborhood park with zipline playground, gazebo, stream and bridges. Walkable from the borough.'),
+  park(39.9659,-75.6044,'Marshall Square Park, West Chester','Small historic park with labeled tree specimens, fountain, gazebo and two play areas.'),
+  park(40.0240,-75.5859,'Treehouse World, West Chester','Paid attraction: ziplines, climbing trees, bungee trampoline. Popular for birthdays.'),
+  park(39.9537,-75.6479,'Stroud Preserve, West Chester','Natural Lands preserve with marked trails through open farmland. Small parking lot fills on weekends.'),
+  park(39.9046,-75.5816,'Sandy Hollow Heritage Park, West Chester','Paved one-mile loop with Revolutionary War interpretive signage. Hilly.'),
+  park(40.0607,-75.5327,'Valley Creek Park, Malvern','Playground, tennis, amphitheater, picnic pavilions and a creek. Connects to Cedar Hollow Preserve.'),
+  park(40.0370,-75.4993,'Greentree Park, Malvern','Well-maintained community park with playground, trails, gazebo and clean seasonal restrooms.'),
+  park(40.1983,-75.7929,'French Creek State Park, Elverson','Largest block of contiguous forest in southeastern PA. Swimming pool, camping and cabins, extensive trails. Closest big park to Glenmoore.'),
+  park(39.9514,-75.4440,'Ridley Creek State Park, Media','2,600 acres of trails and creek access, very family and dog friendly. Parking fills early on nice days.')
+]);
+
+gBest.addTo(map); gGood.addTo(map); gLean.addTo(map); gOut.addTo(map);
+gWork.addTo(map); gNuke.addTo(map);
+gScore.addTo(map); gCostco.addTo(map); gParks.addTo(map);
+
+var toggles = {z_best:gBest, z_good:gGood, z_lean:gLean, z_out:gOut, work:gWork,
+  nuclear:gNuke, prior:gPrior, score:gScore, costco:gCostco, parks:gParks,
+  ring_wilm:ringWilm, ring_wyo:ringWyo, ring_chesco:ringChes, ring_bm:ringBM};
+Object.keys(toggles).forEach(function(id){
+  document.getElementById(id).addEventListener('change', function(e){
+    if(e.target.checked) map.addLayer(toggles[id]); else map.removeLayer(toggles[id]);
+  });
+});
+</script>
+</body>
+</html>
